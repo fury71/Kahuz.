@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kahuz!</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+body{background:linear-gradient(#7dd3fc,#e0f2fe);min-height:100vh;overflow-x:hidden;font-family:'Baloo 2','Comic Sans MS',system-ui,sans-serif}
+.btn{display:block;width:100%;border:4px solid #fff;border-radius:1.5rem;color:#fff;font-weight:900;font-size:1.5rem;padding:.8rem 1.2rem;box-shadow:0 8px 0 rgba(0,0,0,.25);transition:.1s}
+.btn:active{transform:translateY(6px);box-shadow:0 2px 0 rgba(0,0,0,.25)}
+.btn.big{font-size:4rem;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
+.btn.big small{font-size:1.1rem;margin-top:.4rem}
+.card{background:#fff;border-radius:1.5rem;padding:1rem;box-shadow:0 6px 0 rgba(0,0,0,.15)}
+.inp{width:100%;border:4px solid #fde68a;border-radius:1rem;padding:.7rem;margin-bottom:.6rem;font-size:1.3rem;text-align:center;font-weight:700}
+.av{width:72px;height:72px;font-size:42px;border-radius:50%;display:grid;place-items:center;margin:auto;background:radial-gradient(circle at 30% 25%,#fff,#fde68a 45%,#f59e0b);box-shadow:inset -6px -8px 12px rgba(0,0,0,.2),0 8px 14px rgba(0,0,0,.25)}
+.av.big{width:140px;height:140px;font-size:80px}.av.sm{width:44px;height:44px;font-size:26px;margin:0}
+.ab{border-radius:50%}.ab.sel .av{outline:5px solid #f97316}
+.float{animation:fl 3s ease-in-out infinite}.jump{animation:jp .6s ease-out 3}.sad{animation:sd .6s 2}
+@keyframes fl{50%{transform:translateY(-8px) scale(1.04)}}
+@keyframes jp{40%{transform:translateY(-40px) scale(1.15) rotate(-8deg)}}
+@keyframes sd{25%{transform:rotate(-15deg) translateX(-6px)}75%{transform:rotate(15deg) translateX(6px)}}
+.shake{animation:sk .4s}@keyframes sk{25%{transform:translateX(-12px)}75%{transform:translateX(12px)}}
+.pop{animation:pp .4s ease-out both}@keyframes pp{from{opacity:0;transform:scale(.8)}}
+.tm{font-size:2.5rem;font-weight:900;color:#fff;background:#f97316;width:76px;height:76px;border-radius:50%;margin:8px auto;display:grid;place-items:center}
+.tm.hot{background:#ef4444;animation:hb .5s infinite}@keyframes hb{50%{transform:scale(1.2)}}
+.cloud{position:fixed;font-size:60px;opacity:.8;animation:dr 45s linear infinite;pointer-events:none}
+@keyframes dr{from{left:-120px}to{left:100%}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+<div class="cloud" style="top:8%">☁️</div><div class="cloud" style="top:30%;animation-delay:-15s">☁️</div><div class="cloud" style="top:60%;animation-delay:-30s">⭐</div>
+<div id="app" class="relative"></div>
+<script>
+const s = io(), $ = document.getElementById('app');
+const AV = ['🐰','🐻','🦊','🐼','🐺','🐧','🦁','🐸'];
+const COL = ['bg-red-500','bg-blue-500','bg-yellow-500','bg-green-500'];
+const SH = ['●','▲','■','◆'];
+let me = { av: AV[0] }, role, tm;
+
+const av = (a, c = '') => `<div class="av ${c}">${a}</div>`;
+const logo = (z) => `<svg width="${z}" height="${z}" viewBox="0 0 100 100" class="float mx-auto"><circle cx="50" cy="58" r="32" fill="#fcd34d" stroke="#fff" stroke-width="4"/><path d="M12 40 50 20l38 20-38 20z" fill="#1e3a8a"/><rect x="30" y="46" width="40" height="10" fill="#1e3a8a"/><circle cx="39" cy="64" r="4"/><circle cx="61" cy="64" r="4"/><path d="M38 75q12 10 24 0" stroke="#000" stroke-width="3" fill="none"/></svg>`;
+const set = (h, cls = '') => { $.innerHTML = `<div class="pop w-full max-w-3xl mx-auto p-4 text-center ${cls}">${h}</div>`; };
+const board = (t) => `<div class="card text-left space-y-2">${t.slice(0, 5).map((p, i) =>
+  `<div class="flex items-center gap-3 pop" style="animation-delay:${i * .15}s"><span class="text-3xl w-10 text-center">${['🥇','🥈','🥉','4','5'][i]}</span>${av(p.avatar, 'sm')}<b class="flex-1 text-xl">${p.name}</b><b class="text-xl">${p.score}</b></div>`).join('')}</div>`;
+
+function home() {
+  role = null;
+  set(`${logo(90)}<h1 class="text-6xl font-black text-white" style="text-shadow:0 4px 0 #0369a1">Kahuz!</h1>
+  <p class="text-sky-900 font-bold mb-4">Hayvonlar olami 🐾</p>
+  <button class="btn bg-orange-500" onclick="role='host';s.emit('create')">Ustoz sifatida boshlash</button>
+  <div class="card mt-6">
+    <input id="pin" class="inp" placeholder="Game PIN" inputmode="numeric">
+    <input id="nick" class="inp" placeholder="Laqabingiz" maxlength="12">
+    <div class="flex flex-wrap justify-center gap-2 my-3">${AV.map((a, i) => `<button class="ab ${i ? '' : 'sel'}" onclick="pick(this,${i})">${av(a)}</button>`).join('')}</div>
+    <button class="btn bg-green-500" onclick="join()">Kirish</button>
+  </div>`);
+}
+function pick(b, i) {
+  document.querySelectorAll('.ab').forEach((x) => x.classList.remove('sel'));
+  b.classList.add('sel'); me.av = AV[i];
+  b.firstChild.classList.remove('jump'); void b.offsetWidth; b.firstChild.classList.add('jump');
+}
+function join() {
+  role = 'player'; me.name = nick.value.trim();
+  s.emit('join', { pin: pin.value.trim(), name: me.name, avatar: me.av });
+}
+function ans(i) {
+  s.emit('answer', i);
+  set(`${av(me.av, 'big float')}<h2 class="text-3xl font-black text-white mt-4">Javob qabul qilindi!</h2>`);
+}
+function lobby(l) {
+  set(`${logo(80)}<p class="text-sky-900 font-bold">Kirish uchun PIN:</p>
+  <div class="text-7xl font-black bg-white rounded-3xl py-3 my-3">${me.pin}</div>
+  <div class="flex flex-wrap justify-center gap-3">${l.map((p) => `<div class="card pop">${av(p.avatar, 'float')}<b>${p.name}</b></div>`).join('')}</div>
+  ${l.length ? `<button class="btn bg-green-500 mt-5" onclick="s.emit('next')">Boshlash ▶</button>` : '<p class="text-sky-900 font-bold mt-5">O\'yinchilar kutilmoqda…</p>'}`);
+}
+
+s.on('created', (p) => { me.pin = p; lobby([]); });
+s.on('lobby', (l) => { if (role === 'host') lobby(l); });
+s.on('joined', () => set(`${av(me.av, 'jump big')}<h2 class="text-3xl text-white font-black mt-4">${me.name}, tayyormisiz?</h2><p class="text-sky-900 font-bold">Ustoz boshlashini kuting…</p>`));
+s.on('err', (m) => { alert(m); if (m.includes('Ustoz')) home(); });
+
+s.on('question', (d) => {
+  let t = d.t;
+  if (role === 'host') {
+    set(`<div class="text-sky-900 font-bold">${d.n}/${d.total}</div><div id="tm" class="tm">${t}</div>
+    <div class="card text-3xl font-black"><div class="text-7xl float">${d.img}</div>${d.q}</div>
+    <div id="ac" class="text-sky-900 font-bold mt-3">0 javob</div>
+    <div class="grid grid-cols-2 gap-3 mt-3">${d.a.map((x, i) => `<div class="btn ${COL[i]}">${SH[i]} ${x}</div>`).join('')}</div>`);
+  } else {
+    set(`<div id="tm" class="tm">${t}</div><div class="grid grid-cols-2 gap-3" style="height:70vh">${d.a.map((x, i) => `<button class="btn big ${COL[i]}" onclick="ans(${i})">${SH[i]}<small>${x}</small></button>`).join('')}</div>`);
+  }
+  clearInterval(tm);
+  tm = setInterval(() => {
+    t--; const e = document.getElementById('tm');
+    if (e) { e.textContent = Math.max(t, 0); if (t <= 5) e.classList.add('hot'); }
+    if (t <= 0) clearInterval(tm);
+  }, 1000);
+});
+s.on('answered', (n) => { const e = document.getElementById('ac'); if (e) e.textContent = n + ' javob'; });
+
+s.on('result', (d) => {
+  clearInterval(tm);
+  set(`${av(me.av, (d.correct ? 'jump' : 'sad') + ' big')}<h2 class="text-5xl font-black text-white mt-4">${d.correct ? "To'g'ri! 🎉" : 'Xato 😢'}</h2>
+  <div class="text-3xl font-black text-sky-900">+${d.gain} · jami ${d.score}</div>`, d.correct ? '' : 'shake');
+  if (d.correct) confetti({ particleCount: 120, spread: 80, origin: { y: .6 }, shapes: ['star', 'circle'] });
+});
+
+s.on('reveal', (d) => {
+  clearInterval(tm);
+  const m = Math.max(...d.counts, 1);
+  set(`<div class="flex items-end justify-center gap-3" style="height:160px">${d.counts.map((c, i) =>
+    `<div class="${COL[i]} w-16 rounded-t-xl text-white font-black ${i === d.c ? 'ring-4 ring-white' : 'opacity-50'}" style="height:${15 + c / m * 85}%">${SH[i]}<br>${c}</div>`).join('')}</div>
+  <div class="my-4">${board(d.top)}</div>
+  <button class="btn bg-blue-500" onclick="s.emit('next')">${d.last ? 'Natijalar 🏆' : 'Keyingi ▶'}</button>`);
+});
+
+s.on('over', (top) => {
+  set(`${logo(80)}<h2 class="text-5xl font-black text-white mb-3">Tabriklaymiz! 🏆</h2>${board(top)}<button class="btn bg-orange-500 mt-5" onclick="location.reload()">Qayta o'ynash</button>`);
+  confetti({ particleCount: 200, spread: 120, origin: { y: .5 } });
+});
+
+home();
+</script>
+</body>
+</html>
